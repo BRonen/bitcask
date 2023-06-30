@@ -28,26 +28,110 @@ interface BitCask {
     maxFilesBeforeMerge: number
   }
   state: RwLock<Ref<State>>
-  delete: (key: string) => void
-  put: (key: string, value: Value) => void
-  get: (key: string) => Promise<null | Value>
+  delete(key: string): void
+  put(key: string, value: Value): void
+  get(key: string): Promise<null | Value>
 }
 
 const TOMBSTONE_VALUE = '__bitcask__tombstone__'
 
-export default (configs: BitCask['configs']): BitCask => {
-    const keyDir = {}
+export const buildKeyDirFromFiles = (storagePath: string, directoryFiles: string[], ) => {
+    const keyDir: KeyDir = {}
 
-    const currentFilesInDirectory = fs.readdirSync(configs.path).map(
+    for (const directoryFile of directoryFiles) {
+        const fd = fs.openSync(`${storagePath}/${directoryFile}`, 'r')
+
+        const checksum = Buffer.alloc(8)
+        const timestamp = Buffer.alloc(13)
+        const keySize = Buffer.alloc(32)
+        const valueSize = Buffer.alloc(32)
+
+        fs.readSync(
+            fd, checksum, 0, checksum.length, 0,
+        )
+        fs.readSync(
+            fd, timestamp, 0, timestamp.length, 8,
+        )
+        fs.readSync(
+            fd, keySize, 0, keySize.length, 8 + 13,
+        )
+        fs.readSync(
+            fd, valueSize, 0, valueSize.length, 8 + 13 + 32,
+        )
+
+        const key = Buffer.alloc(keySize.readUInt32LE())
+
+        fs.readSync(
+            fd, key, 0, keySize.readUInt32LE(), 8 + 13 + 32 + 32
+        )
+
+        const value = Buffer.alloc(valueSize.readUInt32LE())
+
+        fs.readSync(
+            fd, value, 0, valueSize.readUInt32LE(), 8 + 13 + 32 + 32 + keySize.readUInt32LE()
+        )
+
+        const newChecksum = crc32(`${key.toString()}${value.toString()}`).toString(16)
+
+        if(newChecksum !== checksum.toString())
+            throw new Error(
+                `invalid checksum {${newChecksum} <-> ${checksum.toString()}} of [${key.toString()} -> ${value.toString()}] on (${storagePath}/${directoryFile})`
+            )
+        
+
+        const fileId = Number(directoryFile.split('.')[2])
+
+        const totalLength = (
+            checksum.length +
+            timestamp.length +
+            keySize.length +
+            valueSize.length +
+            key.length +
+            value.length
+        )
+
+        keyDir[key.toString()] = {
+            fileId,
+            valueSize: valueSize.readUInt32LE(),
+            valuePosition: 0,
+            entryLength: totalLength,
+            timestamp: timestamp.readInt16LE()
+        }
+
+        /*
+        console.log(
+            {
+                directoryFile: directoryFile,
+                checksum: checksum.toString(),
+                timestamp: timestamp.toString(),
+                keySize: keySize.readUInt32LE(),
+                valueSize: valueSize.readUInt32LE(),
+                key: key.toString(),
+                value: value.toString(),
+            }
+        )
+        */
+        fs.closeSync(fd)
+    }
+
+    return keyDir
+}
+
+const Bitcask = (configs: BitCask['configs']): BitCask => {
+    const currentFilesInDirectory = fs.readdirSync(configs.path).filter(filePath => filePath.startsWith('bitcask'))
+    
+    const keyDir = buildKeyDirFromFiles(configs.path, currentFilesInDirectory)
+
+    const currentFileId = currentFilesInDirectory.map(
         fileName => fileName.split('.')
-    )
-
-    const currentFileId = currentFilesInDirectory.reduce(
+    ).reduce(
         (acc, [_name, _ext, id]) => id ? Math.max(acc, Number(id)) : 0, 0
     ) + 1
 
     const directoryFilesNumber = currentFilesInDirectory.length
     const currentFileSize = 0
+
+    buildKeyDirFromFiles(configs.path, currentFilesInDirectory)
 
     const state = new RwLock(
         new Ref({
@@ -65,34 +149,75 @@ export default (configs: BitCask['configs']): BitCask => {
             return await this.put(key, TOMBSTONE_VALUE)
         },
         async put (key, value) {
-            const checksum = crc32(`${key}${value}`).toString(16)
+            if(!this.configs.writer)
+                throw new Error('This instance isn\'t a writer instance')
+
+            // checksum => 8 bytes
+            const checksum = Buffer.from(crc32(`${key}${value}`).toString(16))
+
+            // timestamp => 13 bytes
             const timestamp = Date.now()
+            const timestampBuffer = Buffer.alloc(13)
+            timestampBuffer.write(String(timestamp))
+
+            // key => unknown bytes
+            // keySize => 32 bytes
+            const keyBuffer = Buffer.from(key)
+            const keySize = Buffer.alloc(32)
+            keySize.writeUInt32LE(keyBuffer.length)
+
+            // value => unknown bytes
+            // valueSize => 32 bytes
+            const valueBuffer = Buffer.from(String(value))
+            const valueSize = Buffer.alloc(32)
+            valueSize.writeUInt32LE(valueBuffer.length)
 
             return await this.state.write(async stateRef => {
                 const { keyDir, currentFileId, currentFileSize, directoryFilesNumber } = stateRef.getValue()
-
-                const entry = `${checksum}${timestamp}${key.length}${String(value).length}${key}${value}`
-
+                const path = `${this.configs.path}/bitcask.data.${currentFileId}`
                 fs.appendFileSync(
-                    `${this.configs.path}/bitcask.data.${currentFileId}`, entry
+                    path, checksum
+                )
+                fs.appendFileSync(
+                    path, timestampBuffer
+                )
+                fs.appendFileSync(
+                    path, keySize
+                )
+                fs.appendFileSync(
+                    path, valueSize
+                )
+                fs.appendFileSync(
+                    path, keyBuffer
+                )
+                fs.appendFileSync(
+                    path, valueBuffer
+                )
+
+                const totalLength = (
+                    checksum.length +
+                    timestampBuffer.length +
+                    keySize.length +
+                    valueSize.length +
+                    keyBuffer.length +
+                    valueBuffer.length
                 )
 
                 stateRef.setValue({
                     directoryFilesNumber,
                     currentFileId,
-                    currentFileSize: currentFileSize + entry.length,
+                    currentFileSize: currentFileSize + totalLength,
                     keyDir: {
                         ...keyDir,
                         [key]: {
                             fileId: currentFileId,
                             valueSize: String(value).length,
                             valuePosition: currentFileSize,
-                            entryLength: entry.length,
+                            entryLength: totalLength,
                             timestamp
                         }
                     }
                 })
-                // console.log('current state:', { keyDir, ...state })
             })
         },
         async get (key: string) {
@@ -118,6 +243,8 @@ export default (configs: BitCask['configs']): BitCask => {
 
                 return result
             })
-        }
+        },
     }
 }
+
+export default Bitcask
