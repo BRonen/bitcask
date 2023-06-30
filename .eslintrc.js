@@ -35,5 +35,6 @@ module.exports = {
             'never'
         ],
         '@typescript-eslint/no-unused-vars': 'off',
+        'no-constant-condition': 'off',
     }
 }

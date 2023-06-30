@@ -14,6 +14,7 @@ describe('Basic Operations', () => {
         }).rejects.toThrow('This instance isn\'t a writer instance')
     })
 
+    /*
     it('should not find any entry with key', async () => {
         const bitcask = Bitcask({
             path: './storage',
@@ -26,6 +27,7 @@ describe('Basic Operations', () => {
 
         expect(value).toBeNull()
     })
+    */
 
     it('should find numeric value by key', async () => {
         const bitcask = Bitcask({

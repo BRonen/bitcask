@@ -41,76 +41,112 @@ export const buildKeyDirFromFiles = (storagePath: string, directoryFiles: string
     for (const directoryFile of directoryFiles) {
         const fd = fs.openSync(`${storagePath}/${directoryFile}`, 'r')
 
-        const checksum = Buffer.alloc(8)
-        const timestamp = Buffer.alloc(13)
-        const keySize = Buffer.alloc(32)
-        const valueSize = Buffer.alloc(32)
-
-        fs.readSync(
-            fd, checksum, 0, checksum.length, 0,
-        )
-        fs.readSync(
-            fd, timestamp, 0, timestamp.length, 8,
-        )
-        fs.readSync(
-            fd, keySize, 0, keySize.length, 8 + 13,
-        )
-        fs.readSync(
-            fd, valueSize, 0, valueSize.length, 8 + 13 + 32,
-        )
-
-        const key = Buffer.alloc(keySize.readUInt32LE())
-
-        fs.readSync(
-            fd, key, 0, keySize.readUInt32LE(), 8 + 13 + 32 + 32
-        )
-
-        const value = Buffer.alloc(valueSize.readUInt32LE())
-
-        fs.readSync(
-            fd, value, 0, valueSize.readUInt32LE(), 8 + 13 + 32 + 32 + keySize.readUInt32LE()
-        )
-
-        const newChecksum = crc32(`${key.toString()}${value.toString()}`).toString(16)
-
-        if(newChecksum !== checksum.toString())
-            throw new Error(
-                `invalid checksum {${newChecksum} <-> ${checksum.toString()}} of [${key.toString()} -> ${value.toString()}] on (${storagePath}/${directoryFile})`
-            )
+        let offset = 0
         
+        while(true) {
+            const checksum = Buffer.alloc(8)
+            const timestamp = Buffer.alloc(13)
+            const keySize = Buffer.alloc(32)
+            const valueSize = Buffer.alloc(32)
+            
+            fs.readSync(
+                fd, checksum, 0,
+                checksum.length,
+                offset,
+            )
 
-        const fileId = Number(directoryFile.split('.')[2])
+            if(!checksum.readUInt8()) break
+            
+            fs.readSync(
+                fd, timestamp, 0,
+                timestamp.length,
+                offset +
+                checksum.length,
+            )
+            fs.readSync(
+                fd, keySize, 0,
+                keySize.length,
+                offset +
+                checksum.length +
+                timestamp.length,
+            )
+            fs.readSync(
+                fd, valueSize, 0,
+                valueSize.length,
+                offset +
+                checksum.length +
+                timestamp.length +
+                keySize.length,
+            )
+    
+            const key = Buffer.alloc(keySize.readUInt32LE())
+    
+            fs.readSync(
+                fd, key, 0,
+                keySize.readUInt32LE(),
+                offset +
+                checksum.length +
+                timestamp.length +
+                keySize.length +
+                valueSize.length
+            )
+    
+            const value = Buffer.alloc(valueSize.readUInt32LE())
+    
+            fs.readSync(
+                fd, value, 0,
+                valueSize.readUInt32LE(),
+                offset +
+                checksum.length +
+                timestamp.length +
+                keySize.length +
+                valueSize.length +
+                keySize.readUInt32LE()
+            )
+    
+            const newChecksum = crc32(`${key.toString()}${value.toString()}`).toString(16)
 
-        const totalLength = (
-            checksum.length +
-            timestamp.length +
-            keySize.length +
-            valueSize.length +
-            key.length +
-            value.length
-        )
+            /*
+            console.log(
+                {
+                    directoryFile: directoryFile,
+                    checksum: checksum.toString(),
+                    timestamp: timestamp.toString(),
+                    keySize: keySize.readUInt32LE(),
+                    valueSize: valueSize.readUInt32LE(),
+                    key: key.toString(),
+                    value: value.toString(),
+                }
+            )
+            */
 
-        keyDir[key.toString()] = {
-            fileId,
-            valueSize: valueSize.readUInt32LE(),
-            valuePosition: 0,
-            entryLength: totalLength,
-            timestamp: timestamp.readInt16LE()
+            if(newChecksum !== checksum.toString())
+                throw new Error(
+                    `invalid checksum {${newChecksum} <-> ${checksum.toString()}} of [${key.toString()} -> ${value.toString()}] on (${storagePath}/${directoryFile})`
+                )
+            
+            const fileId = Number(directoryFile.split('.')[2])
+    
+            const totalLength = (
+                checksum.length +
+                timestamp.length +
+                keySize.length +
+                valueSize.length +
+                key.length +
+                value.length
+            )
+
+            offset += totalLength
+    
+            keyDir[key.toString()] = {
+                fileId,
+                valueSize: valueSize.readUInt32LE(),
+                valuePosition: 0,
+                entryLength: totalLength,
+                timestamp: Number(timestamp.toString())
+            }
         }
 
-        /*
-        console.log(
-            {
-                directoryFile: directoryFile,
-                checksum: checksum.toString(),
-                timestamp: timestamp.toString(),
-                keySize: keySize.readUInt32LE(),
-                valueSize: valueSize.readUInt32LE(),
-                key: key.toString(),
-                value: value.toString(),
-            }
-        )
-        */
         fs.closeSync(fd)
     }
 
@@ -131,7 +167,7 @@ const Bitcask = (configs: BitCask['configs']): BitCask => {
     const directoryFilesNumber = currentFilesInDirectory.length
     const currentFileSize = 0
 
-    buildKeyDirFromFiles(configs.path, currentFilesInDirectory)
+    console.log(keyDir)
 
     const state = new RwLock(
         new Ref({
