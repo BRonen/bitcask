@@ -31,6 +31,7 @@ interface BitCask {
   delete(key: string): void
   put(key: string, value: Value): void
   get(key: string): Promise<null | Value>
+  listKeys(): Promise<string[]>
 }
 
 const TOMBSTONE_VALUE = '__bitcask__tombstone__'
@@ -167,8 +168,6 @@ const Bitcask = (configs: BitCask['configs']): BitCask => {
     const directoryFilesNumber = currentFilesInDirectory.length
     const currentFileSize = 0
 
-    console.log(keyDir)
-
     const state = new RwLock(
         new Ref({
             keyDir,
@@ -279,6 +278,11 @@ const Bitcask = (configs: BitCask['configs']): BitCask => {
 
                 return result
             })
+        },
+        async listKeys () {
+            return await this.state.read(async stateRef =>
+                Object.keys(stateRef.getValue().keyDir)
+            )
         },
     }
 }
