@@ -3,13 +3,15 @@ import { RwLock, Ref } from 'rwlock-promise'
 import crc32 from 'crc/crc32'
 import { Buffer } from 'node:buffer'
 
-type KeyDir = Record<string, {
-  fileId: number
-  valueSize: number
-  valuePosition: number
-  entryLength: number
-  timestamp: number
-}>
+type EntryHint = {
+    fileId: number
+    valueSize: number
+    valuePosition: number
+    entryLength: number
+    timestamp: number
+}
+
+type KeyDir = Record<string, EntryHint>
 
 interface State {
   keyDir: KeyDir
@@ -18,7 +20,7 @@ interface State {
   currentFileSize: number
 }
 
-type Value = string | number
+type Value = string
 
 interface BitCask {
   configs: {
@@ -32,6 +34,11 @@ interface BitCask {
   put(key: string, value: Value): void
   get(key: string): Promise<null | Value>
   listKeys(): Promise<string[]>
+  fold<T>(
+    foldingCallback: (key: string, value: Value, acc: T) => T,
+    acc: T,
+  ): Promise<T>
+  getValueByEntryHint(key: EntryHint): Value
 }
 
 const TOMBSTONE_VALUE = '__bitcask__tombstone__'
@@ -255,24 +262,15 @@ const Bitcask = (configs: BitCask['configs']): BitCask => {
                 })
             })
         },
-        async get (key: string) {
+        async get (key) {
             return await this.state.read(async stateRef => {
                 const state = stateRef.getValue()
 
-                const keyDir = state.keyDir[key]
+                const entryHint = state.keyDir[key]
 
-                if (!keyDir) return null
+                if (!entryHint) return null
 
-                const resultBuffer = Buffer.alloc(keyDir.entryLength)
-
-                // const file = fs.readFileSync(`${this.configs.path}/bitcask.data.${keyDir.fileId}`)
-                const fd = fs.openSync(`${this.configs.path}/bitcask.data.${keyDir.fileId}`, 'r')
-                fs.readSync(
-                    fd, resultBuffer, 0, keyDir.entryLength, keyDir.valuePosition
-                )
-                fs.closeSync(fd)
-
-                const result = resultBuffer.toString().slice(-keyDir.valueSize)
+                const result = this.getValueByEntryHint(entryHint)
 
                 if (result === TOMBSTONE_VALUE) return null
 
@@ -284,6 +282,29 @@ const Bitcask = (configs: BitCask['configs']): BitCask => {
                 Object.keys(stateRef.getValue().keyDir)
             )
         },
+        async fold (foldingCallback, acc) {
+            return await this.state.read(async stateRef => 
+                Object.entries(stateRef.getValue().keyDir)
+                    .reduce(
+                        (acc, [key, entryHint]) => foldingCallback(
+                            key, this.getValueByEntryHint(entryHint), acc
+                        ),
+                        acc,
+                    )
+            )
+        },
+        getValueByEntryHint (hint: EntryHint) {
+            const resultBuffer = Buffer.alloc(hint.entryLength)
+
+            // const file = fs.readFileSync(`${this.configs.path}/bitcask.data.${hint.fileId}`)
+            const fd = fs.openSync(`${this.configs.path}/bitcask.data.${hint.fileId}`, 'r')
+            fs.readSync(
+                fd, resultBuffer, 0, hint.entryLength, hint.valuePosition
+            )
+            fs.closeSync(fd)
+
+            return resultBuffer.toString().slice(-hint.valueSize)
+        }
     }
 }
 

@@ -17,6 +17,23 @@ describe('Basic Operations', () => {
         }).rejects.toThrow('This instance isn\'t a writer instance')
     })
 
+    it('should fold over every key and then return the accumulator', async () => {
+        const bitcask = Bitcask({
+            path: './storage',
+            writer: true,
+            maxActiveFileSize: 5,
+            maxFilesBeforeMerge: 3
+        })
+
+        await bitcask.put('key test 1', '1')
+        await bitcask.put('key test 2', '2')
+        await bitcask.put('key test 3', '3')
+
+        expect(
+            await bitcask.fold<string>((_key, value, acc) => acc + value, '')
+        ).toBe('123')
+    })
+
     it('should not find any entry with key', async () => {
         const bitcask = Bitcask({
             path: './storage',
