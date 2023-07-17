@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">99.36% </span>
+                <span class="strong">98.76% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>311/313</span>
+                <span class='fraction'>321/325</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">96.77% </span>
+                <span class="strong">93.93% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>30/31</span>
+                <span class='fraction'>31/33</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">88.88% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>8/9</span>
+                <span class='fraction'>9/9</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">99.36% </span>
+                <span class="strong">98.76% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>311/313</span>
+                <span class='fraction'>321/325</span>
             </div>
         
             
@@ -375,7 +375,19 @@
 <a name='L310'></a><a href='#L310'>310</a>
 <a name='L311'></a><a href='#L311'>311</a>
 <a name='L312'></a><a href='#L312'>312</a>
-<a name='L313'></a><a href='#L313'>313</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L313'></a><a href='#L313'>313</a>
+<a name='L314'></a><a href='#L314'>314</a>
+<a name='L315'></a><a href='#L315'>315</a>
+<a name='L316'></a><a href='#L316'>316</a>
+<a name='L317'></a><a href='#L317'>317</a>
+<a name='L318'></a><a href='#L318'>318</a>
+<a name='L319'></a><a href='#L319'>319</a>
+<a name='L320'></a><a href='#L320'>320</a>
+<a name='L321'></a><a href='#L321'>321</a>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a>
+<a name='L324'></a><a href='#L324'>324</a>
+<a name='L325'></a><a href='#L325'>325</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -421,6 +433,12 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">15x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">10x</span>
@@ -684,6 +702,12 @@
 <span class="cline-any cline-yes">15x</span>
 <span class="cline-any cline-yes">15x</span>
 <span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
+<span class="cline-any cline-yes">15x</span>
 <span class="cline-any cline-yes">10x</span>
 <span class="cline-any cline-yes">10x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -732,7 +756,13 @@ interface BitCaskInstance {
 &nbsp;
 const TOMBSTONE_VALUE = '__bitcask__tombstone__'
 &nbsp;
-const checkHash = <span class="fstat-no" title="function not covered" >(hash: string, key: string, value: string) =&gt; hash === crc32(`${key}${value}`).toString(16)</span>
+const checkHash = (hash: string, key: string, value: string) =&gt; {
+    const newHash = crc32(`${key}${value}`).toString(16)
+    if(hash !== newHash)
+<span class="branch-0 cbranch-no" title="branch not covered" >        throw new Error(</span>
+<span class="cstat-no" title="statement not covered" >            `invalid checksum {${newHash} &lt;-&gt; ${hash}} of [${key} -&gt; ${value}]`</span>
+<span class="cstat-no" title="statement not covered" >        )</span>
+}
 &nbsp;
 export const buildKeyDirFromFiles = (storagePath: string, directoryFiles: string[], ) =&gt; {
     const keyDir: KeyDir = {}
@@ -983,6 +1013,7 @@ const Bitcask = (configs: BitCaskInstance['configs']): BitCaskInstance =&gt; {
         },
         getValueByEntryHint (entryHint: KeyDirHint, key: string) {
             const resultBuffer = Buffer.alloc(entryHint.valueSize)
+            const hashBuffer = Buffer.alloc(8)
             const keySize = Buffer.from(key).length
 &nbsp;
             // const file = fs.readFileSync(`${this.configs.path}/bitcask.data.${hint.fileId}`)
@@ -990,11 +1021,16 @@ const Bitcask = (configs: BitCaskInstance['configs']): BitCaskInstance =&gt; {
             fs.readSync(
                 fd, resultBuffer, 0, entryHint.valueSize, entryHint.offset + 85 + keySize
             )
-            fs.closeSync(fd);
+            fs.readSync(
+                fd, hashBuffer, 0, 8, entryHint.offset
+            )
+            fs.closeSync(fd)
 &nbsp;
-            const result = resultBuffer.toString()
+            const value = resultBuffer.toString()
 &nbsp;
-            return result.slice(-entryHint.valueSize)
+            checkHash(hashBuffer.toString(), key, value)
+&nbsp;
+            return value.slice(-entryHint.valueSize)
         }
     }
 }
@@ -1006,7 +1042,7 @@ export default Bitcask</pre></td></tr></table></pre>
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2023-07-17T20:10:48.778Z
+                at 2023-07-17T20:32:47.328Z
             </div>
         <script src="prettify.js"></script>
         <script>

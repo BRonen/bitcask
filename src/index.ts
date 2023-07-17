@@ -43,7 +43,13 @@ interface BitCaskInstance {
 
 const TOMBSTONE_VALUE = '__bitcask__tombstone__'
 
-const checkHash = (hash: string, key: string, value: string) => hash === crc32(`${key}${value}`).toString(16)
+const checkHash = (hash: string, key: string, value: string) => {
+    const newHash = crc32(`${key}${value}`).toString(16)
+    if(hash !== newHash)
+        throw new Error(
+            `invalid checksum {${newHash} <-> ${hash}} of [${key} -> ${value}]`
+        )
+}
 
 export const buildKeyDirFromFiles = (storagePath: string, directoryFiles: string[], ) => {
     const keyDir: KeyDir = {}
@@ -294,6 +300,7 @@ const Bitcask = (configs: BitCaskInstance['configs']): BitCaskInstance => {
         },
         getValueByEntryHint (entryHint: KeyDirHint, key: string) {
             const resultBuffer = Buffer.alloc(entryHint.valueSize)
+            const hashBuffer = Buffer.alloc(8)
             const keySize = Buffer.from(key).length
 
             // const file = fs.readFileSync(`${this.configs.path}/bitcask.data.${hint.fileId}`)
@@ -301,11 +308,16 @@ const Bitcask = (configs: BitCaskInstance['configs']): BitCaskInstance => {
             fs.readSync(
                 fd, resultBuffer, 0, entryHint.valueSize, entryHint.offset + 85 + keySize
             )
+            fs.readSync(
+                fd, hashBuffer, 0, 8, entryHint.offset
+            )
             fs.closeSync(fd)
 
-            const result = resultBuffer.toString()
+            const value = resultBuffer.toString()
 
-            return result.slice(-entryHint.valueSize)
+            checkHash(hashBuffer.toString(), key, value)
+
+            return value.slice(-entryHint.valueSize)
         }
     }
 }
