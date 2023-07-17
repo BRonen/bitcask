@@ -83,6 +83,29 @@ describe('Basic Operations', () => {
         expect(await bitcask.get('test0')).toBe(String(value))
     })
 
+    it('should store more than one key', async () => {
+        const bitcask = Bitcask({
+            path: './storage',
+            writer: true,
+            maxActiveFileSize: 5,
+            maxFilesBeforeMerge: 3
+        })
+
+        const values = ['1', '2', '3', '4', '5', '6']
+
+        await Promise.all(
+            values.map(
+                value => bitcask.put(`key ${value}`, value)
+            )
+        )
+
+        await Promise.all(
+            values.map(
+                async value => expect(await bitcask.get(`key ${value}`)).toBe(value)
+            )
+        )
+    })
+
     it('should find text value by key', async () => {
         const bitcask = Bitcask({
             path: './storage',
