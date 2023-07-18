@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1689647864633" clover="3.2.0">
-  <project timestamp="1689647864633" name="All files">
+<coverage generated="1689647890636" clover="3.2.0">
+  <project timestamp="1689647890636" name="All files">
     <metrics statements="367" coveredstatements="341" conditionals="36" coveredconditionals="34" methods="10" coveredmethods="9" elements="413" coveredelements="384" complexity="0" loc="367" ncloc="367" packages="1" files="1" classes="1"/>
     <file name="index.ts" path="/home/brenno/projects/github/bitcask/src/index.ts">
       <metrics statements="367" coveredstatements="341" conditionals="36" coveredconditionals="34" methods="10" coveredmethods="9"/>
@@ -166,14 +166,14 @@
       <line num="160" count="114" type="cond" truecount="1" falsecount="0"/>
       <line num="161" count="29" type="stmt"/>
       <line num="162" count="180" type="cond" truecount="1" falsecount="0"/>
-      <line num="163" count="90" type="cond" truecount="1" falsecount="0"/>
-      <line num="164" count="90" type="stmt"/>
-      <line num="165" count="90" type="stmt"/>
-      <line num="166" count="90" type="stmt"/>
-      <line num="167" count="90" type="stmt"/>
-      <line num="168" count="90" type="stmt"/>
-      <line num="169" count="90" type="stmt"/>
-      <line num="170" count="90" type="stmt"/>
+      <line num="163" count="86" type="cond" truecount="1" falsecount="0"/>
+      <line num="164" count="86" type="stmt"/>
+      <line num="165" count="86" type="stmt"/>
+      <line num="166" count="86" type="stmt"/>
+      <line num="167" count="86" type="stmt"/>
+      <line num="168" count="86" type="stmt"/>
+      <line num="169" count="86" type="stmt"/>
+      <line num="170" count="86" type="stmt"/>
       <line num="171" count="66" type="stmt"/>
       <line num="172" count="66" type="stmt"/>
       <line num="173" count="66" type="stmt"/>

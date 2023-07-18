@@ -46,10 +46,12 @@ const TOMBSTONE_VALUE = '__bitcask__tombstone__'
 
 const checkHash = (hash: string, key: string, value: string) => {
     const newHash = crc32(`${key}${value}`).toString(16)
-    if(hash !== newHash)
-        throw new Error(
-            `invalid checksum {${newHash} <-> ${hash}} of [${key} -> ${value}]`
-        )
+
+    if(hash === newHash) return
+
+    throw new Error(
+        `invalid checksum {${newHash} <-> ${hash}} of [${key} -> ${value}]`
+    )
 }
 
 export const buildKeyDirFromFiles = (storagePath: string, directoryFiles: string[], ) => {
