@@ -39,6 +39,7 @@ interface BitCaskInstance {
     acc: T,
   ): Promise<T>
   getValueByEntryHint(entryHint: KeyDirHint, key: string): Value
+  merge(): void
 }
 
 const TOMBSTONE_VALUE = '__bitcask__tombstone__'
@@ -122,10 +123,25 @@ export const buildKeyDirFromFiles = (storagePath: string, directoryFiles: string
     
             const newChecksum = crc32(`${key.toString()}${value.toString()}`).toString(16)
 
-            if(newChecksum !== checksum.toString())
-                throw new Error(
-                    `invalid checksum {${newChecksum} <-> ${checksum.toString()}} of [${key.toString()} -> ${value.toString()}] on (${storagePath}/${directoryFile})`
-                )
+            /*
+            console.log(
+                {
+                    directoryFile: directoryFile,
+                    checksum: checksum.toString(),
+                    timestamp: timestamp.toString(),
+                    keySize: keySize.readUInt32LE(),
+                    valueSize: valueSize.readUInt32LE(),
+                    key: key.toString(),
+                    value: value.toString(),
+                }
+            )
+            */
+
+            if (newChecksum !== checksum.toString()) {
+                throw new Error(`
+                    invalid checksum {${newChecksum} <-> ${checksum.toString()}} of [${key.toString()} -> ${value.toString()}] on (${storagePath}/${directoryFile})
+                `)
+            }
             
             const fileId = Number(directoryFile.split('.')[2])
     
@@ -139,6 +155,11 @@ export const buildKeyDirFromFiles = (storagePath: string, directoryFiles: string
             )
 
             offset += totalLength
+
+            if (
+                keyDir[key.toString()] &&
+                Number(timestamp.toString()) > keyDir[key.toString()].timestamp
+            ) continue
     
             keyDir[key.toString()] = {
                 fileId,
@@ -318,7 +339,28 @@ const Bitcask = (configs: BitCaskInstance['configs']): BitCaskInstance => {
             checkHash(hashBuffer.toString(), key, value)
 
             return value.slice(-entryHint.valueSize)
-        }
+        },
+        async merge () {
+            const currentFilesInDirectory = fs.readdirSync(configs.path).filter(filePath => filePath.startsWith('bitcask'))
+
+            const oldKeyDir = buildKeyDirFromFiles(this.configs.path, currentFilesInDirectory)
+
+            await this.state.write(async stateRef => {
+                const { keyDir, ...state } = stateRef.getValue()
+                const mergedKeyDir: KeyDir = {}
+
+                for (const key of Object.keys(keyDir)) {
+                    if(oldKeyDir[key] && oldKeyDir[key].timestamp > keyDir[key].timestamp)
+                        mergedKeyDir[key] = oldKeyDir[key]
+                    else
+                        mergedKeyDir[key] = keyDir[key]
+                }
+
+                stateRef.setValue({
+                    ...state, keyDir
+                })
+            })
+        },
     }
 }
 

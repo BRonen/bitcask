@@ -76,11 +76,11 @@ describe('Basic Operations', () => {
             maxFilesBeforeMerge: 3
         })
 
-        const value = '9'
+        const value = 9 as unknown as string
 
         await bitcask.put('test0', value)
 
-        expect(await bitcask.get('test0')).toBe(String(value))
+        expect(Number(await bitcask.get('test0'))).toBe(value)
     })
 
     it('should store more than one key', async () => {
@@ -140,7 +140,34 @@ describe('Basic Operations', () => {
         expect(await bitcask.get('test')).toBeNull()
     })
 
-    it('should read previous values stored on initialization', async () => {
+    it('should read values stored on previous initializations', async () => {
+        const value = 'Lorem Ipsum'
+
+        {
+            const bitcask = Bitcask({
+                path: './storage',
+                writer: true,
+                maxActiveFileSize: 5,
+                maxFilesBeforeMerge: 3
+            })
+
+            await bitcask.put('unique key', value)
+
+            expect(await bitcask.get('unique key')).toBe(value)
+        }
+        {
+            const bitcask = Bitcask({
+                path: './storage',
+                writer: false,
+                maxActiveFileSize: 5,
+                maxFilesBeforeMerge: 3
+            })
+
+            expect(await bitcask.get('unique key')).toBe(value)
+        }
+    })
+
+    it('should merge previous files into a single one', async () => {
         const value = 'Lorem Ipsum'
 
         {
