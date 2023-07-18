@@ -5,10 +5,10 @@
   "main": "dist/index.js",
   "scripts": {
     "lint": "eslint . --cache",
-    "lint-fix": "eslint . --fix --cache",
+    "lint:fix": "eslint . --fix --cache",
     "start": "node index.js",
     "test": "jest",
-    "test-watch": "jest --watch",
+    "test:watch": "jest --watch",
     "prepare": "husky install"
   },
   "repository": {
