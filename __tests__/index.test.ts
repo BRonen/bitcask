@@ -178,9 +178,13 @@ describe('Basic Operations', () => {
                 maxFilesBeforeMerge: 3
             })
 
-            await bitcask.put('unique key', value)
+            await bitcask.put('unique key 1', value)
+            await bitcask.put('unique key 2', value)
+            await bitcask.put('unique key 3', value)
 
-            expect(await bitcask.get('unique key')).toBe(value)
+            expect(await bitcask.get('unique key 1')).toBe(value)
+            expect(await bitcask.get('unique key 2')).toBe(value)
+            expect(await bitcask.get('unique key 3')).toBe(value)
         }
         {
             const bitcask = Bitcask({
@@ -190,7 +194,32 @@ describe('Basic Operations', () => {
                 maxFilesBeforeMerge: 3
             })
 
-            expect(await bitcask.get('unique key')).toBe(value)
+            expect(await bitcask.get('unique key 1')).toBe(value)
+            expect(await bitcask.get('unique key 2')).toBe(value)
+            expect(await bitcask.get('unique key 3')).toBe(value)
         }
+    })
+
+    it('should have a consistent value read', async () => {
+        const value = 'Lorem Ipsum!'
+
+        const bitcaskWriterInstance = Bitcask({
+            path: './storage',
+            writer: true,
+            maxActiveFileSize: 5,
+            maxFilesBeforeMerge: 3
+        })
+
+        const bitcaskReadOnlyInstance = Bitcask({
+            path: './storage',
+            writer: false,
+            maxActiveFileSize: 5,
+            maxFilesBeforeMerge: 3
+        })
+
+        await bitcaskWriterInstance.put('new unique key', value)
+
+        expect(await bitcaskWriterInstance.get('new unique key')).toBe(value)
+        expect(await bitcaskReadOnlyInstance.get('new unique key')).toBe(value)
     })
 })

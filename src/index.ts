@@ -156,19 +156,19 @@ export const buildKeyDirFromFiles = (storagePath: string, directoryFiles: string
                 value.length
             )
 
-            offset += totalLength
-
             if (
-                keyDir[key.toString()] &&
+                !keyDir[key.toString()] ||
                 Number(timestamp.toString()) > keyDir[key.toString()].timestamp
-            ) continue
-    
-            keyDir[key.toString()] = {
-                fileId,
-                valueSize: valueSize.readUInt32LE(),
-                offset: 0,
-                timestamp: Number(timestamp.toString())
+            ) {
+                keyDir[key.toString()] = {
+                    fileId,
+                    valueSize: valueSize.readUInt32LE(),
+                    offset: offset,
+                    timestamp: Number(timestamp.toString())
+                }
             }
+
+            offset += totalLength
         }
 
         fs.closeSync(fd)
@@ -273,6 +273,22 @@ const Bitcask = (configs: BitCaskInstance['configs']): BitCaskInstance => {
                     valueSize.readUInt32LE()
                 )
 
+                if (value === TOMBSTONE_VALUE) {
+                    const { [key]: _currentEntry, ...newKeyDir } = keyDir
+
+                    stateRef.setValue({
+                        directoryFilesNumber,
+                        currentFile,
+                        currentFileId,
+                        currentFileSize: currentFileSize + totalLength,
+                        keyDir: {
+                            ...newKeyDir,
+                        }
+                    })
+
+                    return
+                }
+
                 stateRef.setValue({
                     directoryFilesNumber,
                     currentFile,
@@ -326,7 +342,6 @@ const Bitcask = (configs: BitCaskInstance['configs']): BitCaskInstance => {
             const hashBuffer = Buffer.alloc(8)
             const keySize = Buffer.from(key).length
 
-            // const file = fs.readFileSync(`${this.configs.path}/bitcask.data.${hint.fileId}`)
             const fd = fs.openSync(`${this.configs.path}/bitcask.data.${entryHint.fileId}`, 'r')
             fs.readSync(
                 fd, resultBuffer, 0, entryHint.valueSize, entryHint.offset + 85 + keySize
